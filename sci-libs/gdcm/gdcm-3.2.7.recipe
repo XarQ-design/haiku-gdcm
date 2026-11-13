@@ -7,7 +7,7 @@ HOMEPAGE="https://gdcm.sourceforge.net/"
 COPYRIGHT="2006-2025 Mathieu Malaterre
 	1993-2005 CREATIS"
 LICENSE="BSD (3-clause)"
-REVISION="1"
+REVISION="2"
 SOURCE_URI="https://github.com/malaterre/GDCM/archive/v$portVersion.tar.gz"
 CHECKSUM_SHA256="b7b17b70c009677cf244cc7837b88386441e097f8861fdeee83aa27d1bc1b090"
 SOURCE_FILENAME="GDCM-$portVersion.tar.gz"
@@ -90,7 +90,6 @@ BUILD()
 		-DGDCM_INSTALL_DATA_DIR=$relativeDataDir/gdcm-$shortVersion \
 		-DGDCM_INSTALL_DOC_DIR=$relativeDocDir \
 		-DGDCM_INSTALL_MAN_DIR=$relativeManDir \
-		-DGDCM_INSTALL_PACKAGE_DIR=$relativeLibDir/cmake/gdcm-$shortVersion \
 		-DGDCM_BUILD_SHARED_LIBS=ON \
 		-DGDCM_USE_SYSTEM_EXPAT=ON \
 		-DGDCM_USE_SYSTEM_OPENJPEG=ON \
@@ -110,7 +109,9 @@ INSTALL()
 		libgdcmMSFF libgdcmcharls libgdcmjpeg8 libgdcmjpeg12 libgdcmjpeg16 \
 		libgdcmuuid libsocketxx
 
+	# GDCMConfig.cmake finds the headers two folders up, so it stays in its
+	# default lib/gdcm-<version>, where CMake also looks for it.
 	packageEntries devel \
 		$developDir \
-		$libDir/cmake
+		$libDir/gdcm-$shortVersion
 }
