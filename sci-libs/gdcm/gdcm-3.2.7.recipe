@@ -1,0 +1,116 @@
+SUMMARY="Grassroots DICOM, a library for medical image files"
+DESCRIPTION="GDCM (Grassroots DICOM) is a C++ library for DICOM, the file \
+format of medical imaging (CT, MRI, ultrasound, X-ray and more). It reads \
+and writes DICOM files and decodes their compressed pixel data: JPEG, \
+JPEG-LS, JPEG 2000 and RLE."
+HOMEPAGE="https://gdcm.sourceforge.net/"
+COPYRIGHT="2006-2025 Mathieu Malaterre
+	1993-2005 CREATIS"
+LICENSE="BSD (3-clause)"
+REVISION="1"
+SOURCE_URI="https://github.com/malaterre/GDCM/archive/v$portVersion.tar.gz"
+CHECKSUM_SHA256="b7b17b70c009677cf244cc7837b88386441e097f8861fdeee83aa27d1bc1b090"
+SOURCE_FILENAME="GDCM-$portVersion.tar.gz"
+SOURCE_DIR="GDCM-$portVersion"
+PATCHES="gdcm-$portVersion.patch"
+
+ARCHITECTURES="all !x86_gcc2"
+SECONDARY_ARCHITECTURES="x86"
+
+shortVersion="${portVersion%.*}"
+libVersion="$portVersion"
+libVersionCompat="$libVersion compat >= $shortVersion"
+
+PROVIDES="
+	gdcm$secondaryArchSuffix = $portVersion
+	lib:libgdcmCommon$secondaryArchSuffix = $libVersionCompat
+	lib:libgdcmDICT$secondaryArchSuffix = $libVersionCompat
+	lib:libgdcmDSED$secondaryArchSuffix = $libVersionCompat
+	lib:libgdcmIOD$secondaryArchSuffix = $libVersionCompat
+	lib:libgdcmMEXD$secondaryArchSuffix = $libVersionCompat
+	lib:libgdcmMSFF$secondaryArchSuffix = $libVersionCompat
+	lib:libgdcmcharls$secondaryArchSuffix = 2.0 compat >= 2
+	lib:libgdcmjpeg8$secondaryArchSuffix = $libVersionCompat
+	lib:libgdcmjpeg12$secondaryArchSuffix = $libVersionCompat
+	lib:libgdcmjpeg16$secondaryArchSuffix = $libVersionCompat
+	lib:libgdcmuuid$secondaryArchSuffix = $libVersionCompat
+	lib:libsocketxx$secondaryArchSuffix = 1.2.0 compat >= 1.2
+	"
+REQUIRES="
+	haiku$secondaryArchSuffix
+	lib:libexpat$secondaryArchSuffix
+	lib:libiconv$secondaryArchSuffix
+	lib:libopenjp2$secondaryArchSuffix
+	lib:libz$secondaryArchSuffix
+	"
+
+PROVIDES_devel="
+	gdcm${secondaryArchSuffix}_devel = $portVersion
+	devel:libgdcmCommon$secondaryArchSuffix = $libVersionCompat
+	devel:libgdcmDICT$secondaryArchSuffix = $libVersionCompat
+	devel:libgdcmDSED$secondaryArchSuffix = $libVersionCompat
+	devel:libgdcmIOD$secondaryArchSuffix = $libVersionCompat
+	devel:libgdcmMEXD$secondaryArchSuffix = $libVersionCompat
+	devel:libgdcmMSFF$secondaryArchSuffix = $libVersionCompat
+	devel:libgdcmcharls$secondaryArchSuffix = 2.0 compat >= 2
+	devel:libgdcmjpeg8$secondaryArchSuffix = $libVersionCompat
+	devel:libgdcmjpeg12$secondaryArchSuffix = $libVersionCompat
+	devel:libgdcmjpeg16$secondaryArchSuffix = $libVersionCompat
+	devel:libgdcmuuid$secondaryArchSuffix = $libVersionCompat
+	devel:libsocketxx$secondaryArchSuffix = 1.2.0 compat >= 1.2
+	"
+REQUIRES_devel="
+	gdcm$secondaryArchSuffix == $portVersion base
+	devel:libexpat$secondaryArchSuffix
+	devel:libopenjp2$secondaryArchSuffix
+	devel:libz$secondaryArchSuffix
+	"
+
+BUILD_REQUIRES="
+	haiku${secondaryArchSuffix}_devel
+	devel:libexpat$secondaryArchSuffix
+	devel:libiconv$secondaryArchSuffix
+	devel:libopenjp2$secondaryArchSuffix
+	devel:libz$secondaryArchSuffix
+	"
+BUILD_PREREQUIRES="
+	cmd:cmake
+	cmd:g++$secondaryArchSuffix
+	cmd:make
+	cmd:pkg_config$secondaryArchSuffix
+	"
+
+BUILD()
+{
+	cmake -Bbuild -S. -DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_INSTALL_PREFIX=$prefix \
+		-DGDCM_INSTALL_BIN_DIR=$relativeBinDir \
+		-DGDCM_INSTALL_LIB_DIR=$relativeLibDir \
+		-DGDCM_INSTALL_INCLUDE_DIR=$relativeIncludeDir/gdcm-$shortVersion \
+		-DGDCM_INSTALL_DATA_DIR=$relativeDataDir/gdcm-$shortVersion \
+		-DGDCM_INSTALL_DOC_DIR=$relativeDocDir \
+		-DGDCM_INSTALL_MAN_DIR=$relativeManDir \
+		-DGDCM_INSTALL_PACKAGE_DIR=$relativeLibDir/cmake/gdcm-$shortVersion \
+		-DGDCM_BUILD_SHARED_LIBS=ON \
+		-DGDCM_USE_SYSTEM_EXPAT=ON \
+		-DGDCM_USE_SYSTEM_OPENJPEG=ON \
+		-DGDCM_USE_SYSTEM_ZLIB=ON \
+		-DGDCM_BUILD_APPLICATIONS=OFF \
+		-DGDCM_BUILD_TESTING=OFF \
+		-DGDCM_BUILD_DOCBOOK_MANPAGES=OFF
+	make -C build $jobArgs
+}
+
+INSTALL()
+{
+	make -C build install
+
+	prepareInstalledDevelLibs \
+		libgdcmCommon libgdcmDICT libgdcmDSED libgdcmIOD libgdcmMEXD \
+		libgdcmMSFF libgdcmcharls libgdcmjpeg8 libgdcmjpeg12 libgdcmjpeg16 \
+		libgdcmuuid libsocketxx
+
+	packageEntries devel \
+		$developDir \
+		$libDir/cmake
+}

@@ -1,0 +1,156 @@
+diff -ru gdcm-a/Source/Common/gdcmSwapper.txx gdcm-b/Source/Common/gdcmSwapper.txx
+--- a/Source/Common/gdcmSwapper.txx	2026-11-13 19:01:15.379258547 -0300
++++ b/Source/Common/gdcmSwapper.txx	2026-11-13 19:01:15.393622285 -0300
+@@ -44,6 +44,12 @@
+ #define bswap_32(X) bswap32(X)
+ #define bswap_64(X) bswap64(X)
+ 
++#elif defined(__HAIKU__)
++
++#define bswap_16(X) __builtin_bswap16(X)
++#define bswap_32(X) __builtin_bswap32(X)
++#define bswap_64(X) __builtin_bswap64(X)
++
+ #elif defined(__OpenBSD__)
+ 
+ #include <machine/endian.h>
+diff -ru gdcm-a/Source/MediaStorageAndFileFormat/gdcmFileStreamer.cxx gdcm-b/Source/MediaStorageAndFileFormat/gdcmFileStreamer.cxx
+--- a/Source/MediaStorageAndFileFormat/gdcmFileStreamer.cxx	2026-11-13 19:11:31.933719756 -0300
++++ b/Source/MediaStorageAndFileFormat/gdcmFileStreamer.cxx	2026-11-13 19:11:31.937327453 -0300
+@@ -35,7 +35,7 @@
+ #include <io.h>
+ typedef int64_t off64_t;
+ #else
+-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__EMSCRIPTEN__)
++#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__EMSCRIPTEN__) || defined(__HAIKU__)
+ #  define off64_t off_t
+ #endif
+ #include <unistd.h> // ftruncate
+diff -ru gdcm-a/Utilities/socketxx/socket++/sockstream.cpp gdcm-b/Utilities/socketxx/socket++/sockstream.cpp
+--- a/Utilities/socketxx/socket++/sockstream.cpp	2026-11-13 18:32:40.458481630 -0300
++++ b/Utilities/socketxx/socket++/sockstream.cpp	2026-11-13 18:32:52.196410794 -0300
+@@ -59,6 +59,7 @@
+ #    include <sys/ioctl.h>
+ #    include <unistd.h>
+ #    include <errno.h>
++#    include <fcntl.h>
+ }
+ #else
+ #   if (_MSC_VER >= 1400)
+@@ -264,7 +265,9 @@
+   case EISCONN:
+   case ENOTCONN:
+   case ESHUTDOWN:
++#ifdef ETOOMANYREFS
+   case ETOOMANYREFS:
++#endif
+   case ETIMEDOUT:
+   case ECONNREFUSED:
+   case ELOOP:
+@@ -272,10 +275,12 @@
+   case EHOSTDOWN:
+   case EHOSTUNREACH:
+   case ENOTEMPTY:
+-#   if !defined(__linux__) && !defined(__sun) && !defined(__hpux) && !defined(__EMSCRIPTEN__) && !defined(__wasi__) // LN
++#   if !defined(__linux__) && !defined(__sun) && !defined(__hpux) && !defined(__EMSCRIPTEN__) && !defined(__wasi__) && !defined(__HAIKU__) // LN
+   case EPROCLIM:
+ #   endif
++#ifdef EUSERS
+   case EUSERS:
++#endif
+   case EDQUOT:
+     return true;
+   }
+@@ -980,7 +985,11 @@
+ // return true, if the read pointer for socket points to an
+ // out of band data
+ {
+-#if !defined(WIN32) || defined(__CYGWIN__)
++#if defined(__HAIKU__)
++  int arg = ::sockatmark (rep->sock);
++  if (arg == -1)
++    throw sockerr (errno, "sockbuf::atmark", sockname.text.c_str());
++#elif !defined(WIN32) || defined(__CYGWIN__)
+   int arg;
+   if (::ioctl (rep->sock, SIOCATMARK, &arg) == -1)
+     throw sockerr (errno, "sockbuf::atmark", sockname.text.c_str());
+@@ -998,27 +1007,41 @@
+ // return the process group id that would receive SIGIO and SIGURG
+ // signals
+ {
++#if defined(__HAIKU__)
++  throw sockerr (ENOSYS, "sockbuf::pgrp", sockname.text.c_str());
++#else
+   int arg;
+   if (::ioctl (rep->sock, SIOCGPGRP, &arg) == -1)
+     throw sockerr (errno, "sockbuf::pgrp", sockname.text.c_str());
+   return arg;
++#endif
+ }
+ 
+ int sockbuf::pgrp (int new_pgrp) const
+ // set the process group id that would receive SIGIO and SIGURG signals.
+ // return the old pgrp
+ {
++#if defined(__HAIKU__)
++  (void) new_pgrp;
++  throw sockerr (ENOSYS, "sockbuf::pgrp", sockname.text.c_str());
++#else
+   int old = pgrp ();
+   if (::ioctl (rep->sock, SIOCSPGRP, &new_pgrp) == -1)
+     throw sockerr (errno, "sockbuf::pgrp", sockname.text.c_str());
+   return old;
++#endif
+ }
+ 
+ void sockbuf::closeonexec (bool set) const
+ // if set is true, set close on exec flag
+ // else clear close on exec flag
+ {
+-#if !defined( __sgi) && !defined(__hpux)
++#if defined(__HAIKU__)
++  int flags = ::fcntl (rep->sock, F_GETFD);
++  if (flags == -1
++      || ::fcntl (rep->sock, F_SETFD, set ? (flags | FD_CLOEXEC) : (flags & ~FD_CLOEXEC)) == -1)
++    throw sockerr (errno, "sockbuf::closeonexec", sockname.text.c_str());
++#elif !defined( __sgi) && !defined(__hpux)
+   if (set) {
+     if (::ioctl (rep->sock, FIOCLEX, 0) == -1)
+       throw sockerr (errno, "sockbuf::closeonexec", sockname.text.c_str());
+@@ -1076,9 +1099,14 @@
+ // if set is true, set socket for asynchronous io. If any io is
+ // possible on the socket, the process will get SIGIO
+ {
++#if defined(__HAIKU__)
++  (void) set;
++  throw sockerr (ENOSYS, "sockbuf::async", sockname.text.c_str());
++#else
+   int arg = set;
+   if (::ioctl (rep->sock, FIOASYNC, &arg) == -1)
+     throw sockerr (errno, "sockbuf::async", sockname.text.c_str());
++#endif
+ }
+ #endif // !WIN32
+ 
+diff -ru gdcm-a/Utilities/socketxx/socket++/sockstream.h gdcm-b/Utilities/socketxx/socket++/sockstream.h
+--- a/Utilities/socketxx/socket++/sockstream.h	2026-11-13 18:32:40.458501884 -0300
++++ b/Utilities/socketxx/socket++/sockstream.h	2026-11-13 18:32:40.486922967 -0300
+@@ -139,7 +139,9 @@
+             sock_stream            = SOCK_STREAM,
+             sock_dgram            = SOCK_DGRAM,
+             sock_raw            = SOCK_RAW,
++#ifdef SOCK_RDM
+             sock_rdm            = SOCK_RDM,
++#endif
+             sock_seqpacket      = SOCK_SEQPACKET
+         };
+         enum option {
+@@ -163,7 +165,7 @@
+             msg_peek            = MSG_PEEK,
+             msg_dontroute    = MSG_DONTROUTE
+ 
+-#if !(defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__GNU__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__bsdi__) || defined(__APPLE__) || defined(__EMSCRIPTEN__) )
++#if !(defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__GNU__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__bsdi__) || defined(__APPLE__) || defined(__EMSCRIPTEN__) || defined(__HAIKU__) )
+             ,msg_maxiovlen    = MSG_MAXIOVLEN
+ #endif
+         };
